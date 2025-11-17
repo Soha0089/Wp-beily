@@ -24,7 +24,7 @@
   },
   "database": {
     "type": "mongodb",
-    "path": "mongodb+srv://mahmudx0010:QvacMTxqYDIR0FZe@cluster0.ruiz8az.mongodb.net/WhatsAppBotV2?retryWrites=true&w=majority&appName=Cluster0",
+    "uri": "mongodb+srv://mahmudx0010:QvacMTxqYDIR0FZe@cluster0.ruiz8az.mongodb.net/WhatsAppBotV2?retryWrites=true&w=majority&appName=Cluster0",
     "autoSync": true
   },
   "dashBoard": {
