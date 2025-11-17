@@ -14,10 +14,7 @@ mongoose.set('bufferCommands', false);
 // Determine preferred database mode and JSON path
 const preferredDbType = (config.database && config.database.type) ? config.database.type.toLowerCase() : 'mongodb';
 let currentDbMode = preferredDbType; // can switch to 'json' if Mongo fails
-
-// --- FIX: Ensure JSON path is a local file path for fallback ---
-const jsonDbPath = path.join(__dirname, '..', 'data', 'database.json');
-// -----------------------------------------------------------------
+const jsonDbPath = (config.database && config.database.path) ? config.database.path : path.join(__dirname, '..', 'data', 'database.json');
 
 // Optimized JSON DB helpers with caching
 let jsonDbCache = null;
@@ -100,10 +97,7 @@ async function initDatabase() {
       return;
     }
 
-    // --- FIX: Use 'uri' property from config, which we aligned with config.json ---
     const uri = config.database && config.database.uri;
-    // -----------------------------------------------------------------------------
-    
     if (uri && uri.startsWith('mongodb')) {
       await mongoose.connect(uri, {
         useNewUrlParser: true,
@@ -116,7 +110,7 @@ async function initDatabase() {
         return;
       }
     } else {
-      log('⚠️ No MongoDB URI provided or it is invalid. Falling back to JSON mode. Ensure config.database.type is "mongodb" and a valid URI is set in config.database.uri.', 'warning');
+      log('⚠️ No MongoDB URI provided. Falling back to JSON mode. Set config.database.type to "mongodb" and provide a valid URI to use MongoDB.', 'warning');
     }
   } catch (err) {
     log(`❌ MongoDB connection error: ${err.message}`, 'error');
