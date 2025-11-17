@@ -15,7 +15,7 @@
   },
   "adminBot": [
     "219494303703244@s.whatsapp.net" 
-  ],   // note that have add uids separatelty for gcs and inboxs . Soon i will fix it!!
+  ], 
   "adminOnly": false,
   "whiteListMode": {
     "enabled": false,
