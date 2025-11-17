@@ -1,11 +1,11 @@
-const { getUserData } = require("../scripts/helpers");
+const { getUserData, normalizeJid } = require("../scripts/helpers");
 
 module.exports = {
   config: {
     name: "balance",
     aliases: ["bal", "wallet", "money", "cash"],
-    version: "1.4",
-    author: "RL",
+    version: "1.5", // Updated version
+    author: "RL + Fixes",
     countDown: 5,
     role: 0,
     description: "Check your balance or a mentioned user's.",
@@ -23,28 +23,38 @@ module.exports = {
   },
 
   onStart: async function ({ message, getLang, client }) {
-    const mentionIds = message.mentionedIds || [];
+    // Note: message.mentionedIds contains IDs in 'number@c.us' or 'number@g.us' format (from the client)
+    const rawMentionIds = message.mentionedIds || [];
 
-    if (mentionIds.length) {
-      const results = await Promise.all(mentionIds.map(async id => {
-        const data = await getUserData(id);
+    if (rawMentionIds.length) {
+      const results = await Promise.all(rawMentionIds.map(async id => {
+        const normalizedId = normalizeJid(id); // Ensure consistent ID format
+        const data = await getUserData(normalizedId);
         const coins = data?.coins || 0;
-        let name = id.split("@")[0];
+        let name = normalizedId.split("@")[0]; // Fallback name
 
+        // Try to get a better name using the client (if available)
         try {
-          const c = await client.getContactById(id);
-          name = c.name || c.pushname || name;
-        } catch {}
+          if (client && typeof client.getContactById === 'function') {
+            const c = await client.getContactById(normalizedId);
+            name = c.name || c.pushname || name;
+          }
+        } catch (e) {
+          // console.error("Error getting contact name:", e);
+        }
 
-        return getLang("moneyOf").replace("%1", name).replace("%2", coins);
+        return getLang("moneyOf").replace("%1", name).replace("%2", coins.toLocaleString()); // Added toLocaleString for better formatting
       }));
 
       return message.reply(results.join("\n"));
     }
 
-    const uid = message.author;
+    // Default to the message sender
+    const uid = normalizeJid(message.author); // Normalize sender's ID
     const data = await getUserData(uid);
     const coins = data?.coins || 0;
-    return message.reply(getLang("money").replace("%1", coins));
+    
+    // Added toLocaleString for better formatting
+    return message.reply(getLang("money").replace("%1", coins.toLocaleString()));
   }
 };
