@@ -31,10 +31,16 @@ module.exports = {
                 const chatPrefix = await this.getChatPrefix(chat.id._serialized);
 
                 const prefixInfo =
-                    `🌎 𝐆𝐥𝐨𝐛𝐚𝐥 𝐩𝐫𝐞𝐟𝐢𝐱: ${globalPrefix}\n` +
-                    `📚 𝐘𝐨𝐮𝐫 𝐠𝐫𝐨𝐮𝐩 𝐩𝐫𝐞𝐟𝐢𝐱: ${chatPrefix || globalPrefix}`;
+`🌎 𝐆𝐥𝐨𝐛𝐚𝐥 𝐩𝐫𝐞𝐟𝐢𝐱: ${globalPrefix}
+ 📚 𝐘𝐨𝐮𝐫 𝐠𝐫𝐨𝐮𝐩 𝐩𝐫𝐞𝐟𝐢𝐱: ${chatPrefix || globalPrefix}
 
-                return await message.reply(prefixInfo);
+╭‣ 𝐀𝐝𝐦𝐢𝐧 👑
+╰‣ 𝐌𝐚𝐡 𝐌𝐔𝐃
+
+╭‣ 𝐅𝐚𝐜𝐞𝐛𝐨𝐨𝐤 ⓕ
+╰‣ m.me/mahmud0x7`;
+
+return await message.reply(prefixInfo);
             }
 
             // Handle reset command
