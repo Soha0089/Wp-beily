@@ -1,31 +1,7 @@
-const { getUserData, updateUserData } = require('../scripts/helpers');
+// slot.js (FIXED)
 
-function getSenderId(message) {
-  if (!message) return null;
-  
-  // Try multiple approaches to get sender ID
-  // 1. Check if message.sender exists (common pattern)
-  if (message.sender) {
-    return message.sender;
-  }
-  
-  // 2. For group messages, check author field
-  if (message.from && message.from.endsWith('@g.us')) {
-    return message.author || null;
-  }
-  
-  // 3. For direct messages, use from field
-  if (message.from) {
-    return message.from;
-  }
-  
-  // 4. Fallback: check key structure (Baileys format)
-  if (message.key) {
-    return message.key.participant || message.key.remoteJid;
-  }
-  
-  return null;
-}
+const { getUserData, updateUserData, normalizeJid } = require('../scripts/helpers');
+const { log } = require('../scripts/helpers'); // Log for debugging
 
 module.exports = {
   config: {
@@ -37,25 +13,36 @@ module.exports = {
     description: "Play slot machine to win or lose coins.",
     category: "economy",
     guide: {
-      en: "Usage: !slot <amount>"
+      en: "Usage: {prefix}slot <amount>"
     }
   },
 
   onStart: async function ({ message, args }) {
-    const senderID = getSenderId(message);
-    if (!senderID) return message.reply("❌ Cannot determine your ID.");
+    // Use the sender ID provided by the message wrapper from index.js
+    const senderID = normalizeJid(message.sender); 
+    
+    if (!senderID) {
+        log("❌ Cannot determine sender ID in slot command.", 'error');
+        return message.reply("❌ Cannot determine your ID. Please try again.");
+    }
 
     const bet = parseInt(args[0]);
     if (isNaN(bet) || bet <= 0) {
-      return message.reply("❌ Please enter a valid bet amount.\nExample: !slot 100");
+      return message.reply("❌ Please enter a valid bet amount (a positive number).\nExample: {prefix}slot 100");
     }
 
     try {
       const userData = await getUserData(senderID);
-      if (!userData) return message.reply("❌ User data not found.");
+      
+      if (!userData) {
+          log(`❌ User data not found for ${senderID}`, 'error');
+          return message.reply("❌ User data not found.");
+      }
+      
+      const currentCoins = userData.coins || 0;
 
-      if (userData.coins < bet) {
-        return message.reply(`❌ You don't have enough coins.\nBalance: ${userData.coins}`);
+      if (currentCoins < bet) {
+        return message.reply(`❌ You don't have enough coins.\nBalance: ${currentCoins.toLocaleString()}`);
       }
 
       const symbols = ["❤", "💜", "💙", "💚", "💛", "🖤", "🤍", "🤎"];
@@ -65,23 +52,26 @@ module.exports = {
         symbols[Math.floor(Math.random() * symbols.length)]
       ];
 
-      let reward = 0;
+      let multiplier = -1; // Default to loss
       if (result[0] === result[1] && result[1] === result[2]) {
-        reward = bet * 10;
+        multiplier = 10; // Triple match (Win x10)
       } else if (result[0] === result[1] || result[1] === result[2] || result[0] === result[2]) {
-        reward = bet * 2;
-      } else {
-        reward = -bet;
-      }
+        multiplier = 2; // Double match (Win x2)
+      } 
+      
+      const reward = bet * multiplier; // Can be negative for loss
 
-      const updatedCoins = userData.coins + reward;
-      await updateUserData(senderID, { coins: updatedCoins });
+      const updatedCoins = currentCoins + reward;
+      
+      // Update data: uses final calculated value, which is handled by $set in helpers.js
+      await updateUserData(senderID, { coins: updatedCoins }); 
 
-      const display = `>🎀\n• 𝐁𝐚𝐛𝐲, 𝐘𝐨𝐮 ${reward > 0 ? "𝐰𝐨𝐧" : "𝐥𝐨𝐬𝐭"} $${Math.abs(reward)}\n• 𝐆𝐚𝐦𝐞 𝐑𝐞𝐬𝐮𝐥𝐭𝐬 [ ${result.join(" | ")} ]`;
+      const display = `>🎀\n• 𝐆𝐚𝐦𝐞 𝐑𝐞𝐬𝐮𝐥𝐭𝐬 [ ${result.join(" | ")} ]\n• 𝐁𝐚𝐛𝐲, 𝐘𝐨𝐮 ${reward >= 0 ? "𝐰𝐨𝐧" : "𝐥𝐨𝐬𝐭"} $${Math.abs(reward).toLocaleString()}\n• 𝐍𝐞𝐰 𝐁𝐚𝐥𝐚𝐧𝐜𝐞: ${updatedCoins.toLocaleString()}`;
+      
       return message.reply(display);
     } catch (err) {
-      console.error("Slot error:", err);
-      return message.reply("❌ Something went wrong.");
+      log(`Slot error for ${senderID}: ${err.message}`, 'error');
+      return message.reply("❌ Something went wrong while processing your slot game.");
     }
   }
 };
