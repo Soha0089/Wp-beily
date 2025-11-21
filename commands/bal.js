@@ -1,10 +1,12 @@
+// bal.js (FIXED)
+
 const { getUserData, normalizeJid } = require("../scripts/helpers");
 
 module.exports = {
   config: {
     name: "balance",
     aliases: ["bal", "wallet", "money", "cash"],
-    version: "1.5", // Updated version
+    version: "1.5",
     author: "RL + Fixes",
     countDown: 5,
     role: 0,
@@ -23,38 +25,39 @@ module.exports = {
   },
 
   onStart: async function ({ message, getLang, client }) {
-    // Note: message.mentionedIds contains IDs in 'number@c.us' or 'number@g.us' format (from the client)
     const rawMentionIds = message.mentionedIds || [];
+    const chatID = message.from;
 
     if (rawMentionIds.length) {
       const results = await Promise.all(rawMentionIds.map(async id => {
-        const normalizedId = normalizeJid(id); // Ensure consistent ID format
+        // IDs from message.mentionedIds are usually already normalized (e.g., number@s.whatsapp.net in Baileys context)
+        // Re-normalize just to be safe with the helper function
+        const normalizedId = normalizeJid(id); 
         const data = await getUserData(normalizedId);
         const coins = data?.coins || 0;
-        let name = normalizedId.split("@")[0]; // Fallback name
+        let name = data.name || normalizedId.split("@")[0]; // Use DB name first
 
-        // Try to get a better name using the client (if available)
+        // Try to get a better name using the client/compat layer
         try {
-          if (client && typeof client.getContactById === 'function') {
-            const c = await client.getContactById(normalizedId);
-            name = c.name || c.pushname || name;
+          if (client && typeof client.getContactInfo === 'function') { // Assuming getContactInfo exists on the compat layer
+            const contact = await client.getContactInfo(normalizedId);
+            name = contact.name || contact.pushname || name;
           }
         } catch (e) {
-          // console.error("Error getting contact name:", e);
+          // Silent error for name fetching
         }
 
-        return getLang("moneyOf").replace("%1", name).replace("%2", coins.toLocaleString()); // Added toLocaleString for better formatting
+        return getLang("moneyOf").replace("%1", name).replace("%2", coins.toLocaleString());
       }));
 
       return message.reply(results.join("\n"));
     }
 
     // Default to the message sender
-    const uid = normalizeJid(message.author); // Normalize sender's ID
+    const uid = normalizeJid(message.sender); // Use message.sender (participant or remoteJid)
     const data = await getUserData(uid);
     const coins = data?.coins || 0;
     
-    // Added toLocaleString for better formatting
     return message.reply(getLang("money").replace("%1", coins.toLocaleString()));
   }
 };
