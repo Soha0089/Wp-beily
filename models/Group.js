@@ -1,4 +1,4 @@
-// models/Group.js
+// models/Group.js (UPDATED for Per-Group Count)
 
 const mongoose = require('mongoose');
 const config = require('../config.json');
@@ -12,12 +12,10 @@ const groupSchema = new mongoose.Schema({
   },
   // Group-specific configuration settings
   settings: {
-    // Current prefix for the group
     prefix: {
         type: String,
         default: config.bot.prefix || '!'
     },
-    // Welcome message settings
     welcomeDisabled: {
       type: Boolean,
       default: false
@@ -26,25 +24,29 @@ const groupSchema = new mongoose.Schema({
       type: String,
       default: null
     },
-    // Goodbye message settings
     goodbyeDisabled: {
       type: Boolean,
       default: false
     }
-    // You can add more group settings here (e.g., nsfw/game mode, etc.)
   },
   // Statistics: Total commands executed in this group
   commandCount: {
     type: Number,
     default: 0
   },
+  // NEW FIELD: Stores message counts for users in this specific group
+  messageCounts: {
+    type: Map,
+    of: Number, // Key is User ID, Value is Message Count
+    default: {}
+  },
   // List of members (optional, for specific per-group features)
   members: [{
-    id: String, // Member JID
-    role: { type: String, default: 'member' } // Custom role/status
+    id: String, 
+    role: { type: String, default: 'member' } 
   }]
 }, {
-    timestamps: true // Adds createdAt and updatedAt fields
+    timestamps: true 
 });
 
 module.exports = mongoose.model('Group', groupSchema);
