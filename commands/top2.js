@@ -5,7 +5,7 @@ const { log, getAllUsers, normalizeJid } = require('../scripts/helpers');
 
 module.exports = {
   config: {
-    name: "top",
+    name: "top2",
     version: "1.8", // ভার্সন আপডেট করা হলো
     author: "MahMUD",
     role: 0,
