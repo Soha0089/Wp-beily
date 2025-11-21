@@ -513,8 +513,16 @@ class WhatsAppBot {
                         hasMedia,
                         type: simpleType,
                         downloadMedia,
-                        body: content?.caption || q?.conversation || q?.extendedTextMessage?.text || ''
+                        body: content?.caption || q?.conversation || q?.extendedTextMessage?.text || '',
+                        // Custom property used by onChat logic in bot.js
+                        fromMe: contextInfo?.quotedMessage?.key?.fromMe || false 
                     };
+                },
+                quotedMsg: { // Add a reliable quotedMsg object for command compatibility
+                    fromMe: contextInfo?.quotedMessage?.key?.fromMe || false,
+                    body: contextInfo?.quotedMessage?.conversation || contextInfo?.quotedMessage?.extendedTextMessage?.text || '',
+                    // The rest of the quoted message details are complex, but fromMe and body are often needed.
+                    // For full reliability, the getQuotedMessage function should be used.
                 },
                 getMentions: async () => {
                     return mentionedIds.map(id => ({
