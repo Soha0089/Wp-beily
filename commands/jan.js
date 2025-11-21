@@ -55,19 +55,30 @@ module.exports = {
       const lowerBody = body.toLowerCase();
       
       // --- 1. Handle Direct Reply/Quote to the Bot ---
+      // Your index.js provides quotedMsg, which should be checked first for direct replies.
       if (message.quotedMsg && message.quotedMsg.fromMe) {
-        // If the user quotes the bot, treat the ENTIRE message body as the query for the API.
+        // Treat the ENTIRE message body as the query for the API.
         const replyText = await getBotResponse(body);
         return client.sendMessage(message.from, { text: replyText }, { quoted: message });
       }
 
       // --- 2. Check for Trigger Word in New Message ---
       
-      let triggerUsed = "";
+      let triggerEndIndex = -1; // To store the position where the command ends
       let isTriggered = false;
+      
       for (const t of mahmud) {
+        // Check if the message starts with the trigger (case-insensitive check on lowerBody)
         if (lowerBody === t || lowerBody.startsWith(t + " ")) {
-          triggerUsed = t;
+          
+          // Calculate the end index based on the lowercase trigger length
+          triggerEndIndex = t.length; 
+          
+          // If there is more text after the trigger, account for the space
+          if (lowerBody.startsWith(t + " ")) {
+              triggerEndIndex += 1; // Add 1 for the space separator
+          }
+          
           isTriggered = true;
           break;
         }
@@ -92,19 +103,20 @@ module.exports = {
         "মন সুন্দর বানাও মুখের জন্য তো 'Snapchat' আছেই! 🌚"
       ];
       
-      // Extract the query after the trigger
-      const query = body.substring(triggerUsed.length).trim();
+      // --- 3. Extract the Query using the calculated index on the original body ---
+      // This step ensures correct query extraction regardless of capitalization (e.g., 'Bby hi')
+      const query = body.substring(triggerEndIndex).trim();
 
-      // --- 3. Handle "Trigger Only" (Random Reply) ---
+      // --- 4. Handle "Trigger Only" (Random Reply) ---
       if (query.length === 0) {
         const randomMsg = responses[Math.floor(Math.random() * responses.length)];
         return client.sendMessage(message.from, { text: randomMsg }, { quoted: message });
       } 
       
-      // --- 4. Handle "Trigger + Message" (API Response) ---
+      // --- 5. Handle "Trigger + Message" (API Response) ---
       else {
+        // This is the logic for multi-word commands (e.g., "bby ki koro")
         const botResponse = await getBotResponse(query);
-        // Ensure that if the API returns an error, it sends that error message.
         return client.sendMessage(message.from, { text: botResponse }, { quoted: message });
       }
 
