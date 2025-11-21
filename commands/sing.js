@@ -30,7 +30,7 @@ onStart: async function({ message, args, client, prefix, config, chat, contact }
         const apiUrl = `${await mahmud()}/api/song?query=${query}`;  
 
         // Send a loading message  
-        await message.reply(`🎵 Searching for "${args.join(" ")}"... Please wait...`);  
+        await message.reply(`Searching your song please wait baby <😘`);  
 
         const response = await axios.get(apiUrl, {  
             responseType: "stream",  
