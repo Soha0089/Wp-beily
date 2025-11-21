@@ -54,15 +54,15 @@ module.exports = {
       const body = (message.body || "").trim();
       const lowerBody = body.toLowerCase();
       
-      // --- 1. Reply to Bot's Message (Similar to onReply) ---
+      // --- 1. Handle Direct Reply/Quote to the Bot ---
       if (message.quotedMsg && message.quotedMsg.fromMe) {
-        // This means the user is replying directly to a message sent by the bot (fromMe)
+        // If the user quotes the bot, treat the ENTIRE message body as the query for the API.
         const replyText = await getBotResponse(body);
         return client.sendMessage(message.from, { text: replyText }, { quoted: message });
       }
 
-      // --- 2. New Message Trigger Check (Similar to onChat) ---
-      // Find the trigger word used at the start of the message
+      // --- 2. Check for Trigger Word in New Message ---
+      
       let triggerUsed = "";
       let isTriggered = false;
       for (const t of mahmud) {
@@ -98,14 +98,13 @@ module.exports = {
       // --- 3. Handle "Trigger Only" (Random Reply) ---
       if (query.length === 0) {
         const randomMsg = responses[Math.floor(Math.random() * responses.length)];
-        // The WhatsApp framework doesn't have a direct "typing indicator" or "reaction" like Messenger, 
-        // so we'll just send the message.
         return client.sendMessage(message.from, { text: randomMsg }, { quoted: message });
       } 
       
       // --- 4. Handle "Trigger + Message" (API Response) ---
       else {
         const botResponse = await getBotResponse(query);
+        // Ensure that if the API returns an error, it sends that error message.
         return client.sendMessage(message.from, { text: botResponse }, { quoted: message });
       }
 
