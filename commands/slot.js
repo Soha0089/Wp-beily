@@ -1,7 +1,9 @@
-// slot.js (FIXED)
+// slot.js (FIXED Output Format)
 
 const { getUserData, updateUserData, normalizeJid } = require('../scripts/helpers');
-const { log } = require('../scripts/helpers'); // Log for debugging
+const { log } = require('../scripts/helpers');
+
+// Helper function to get sender ID is removed, relying on message.sender
 
 module.exports = {
   config: {
@@ -18,27 +20,19 @@ module.exports = {
   },
 
   onStart: async function ({ message, args }) {
-    // Use the sender ID provided by the message wrapper from index.js
-    const senderID = normalizeJid(message.sender); 
-    
-    if (!senderID) {
-        log("❌ Cannot determine sender ID in slot command.", 'error');
-        return message.reply("❌ Cannot determine your ID. Please try again.");
-    }
+    const senderID = normalizeJid(message.sender);
+    if (!senderID) return message.reply("❌ Cannot determine your ID.");
 
     const bet = parseInt(args[0]);
     if (isNaN(bet) || bet <= 0) {
-      return message.reply("❌ Please enter a valid bet amount (a positive number).\nExample: {prefix}slot 100");
+      return message.reply("❌ Please enter a valid bet amount (a positive number).\nExample: !slot 100");
     }
 
     try {
       const userData = await getUserData(senderID);
       
-      if (!userData) {
-          log(`❌ User data not found for ${senderID}`, 'error');
-          return message.reply("❌ User data not found.");
-      }
-      
+      if (!userData) return message.reply("❌ User data not found.");
+
       const currentCoins = userData.coins || 0;
 
       if (currentCoins < bet) {
@@ -59,14 +53,21 @@ module.exports = {
         multiplier = 2; // Double match (Win x2)
       } 
       
-      const reward = bet * multiplier; // Can be negative for loss
-
+      const reward = bet * multiplier; 
       const updatedCoins = currentCoins + reward;
       
-      // Update data: uses final calculated value, which is handled by $set in helpers.js
       await updateUserData(senderID, { coins: updatedCoins }); 
 
-      const display = `>🎀\n• 𝐆𝐚𝐦𝐞 𝐑𝐞𝐬𝐮𝐥𝐭𝐬 [ ${result.join(" | ")} ]\n• 𝐁𝐚𝐛𝐲, 𝐘𝐨𝐮 ${reward >= 0 ? "𝐰𝐨𝐧" : "𝐥𝐨𝐬𝐭"} $${Math.abs(reward).toLocaleString()}\n• 𝐍𝐞𝐰 𝐁𝐚𝐥𝐚𝐧𝐜𝐞: ${updatedCoins.toLocaleString()}`;
+      // --- FIXED OUTPUT FORMAT ---
+      const winStatus = reward >= 0 ? "𝐰𝐨𝐧" : "𝐥𝐨𝐬𝐭";
+      const amount = Math.abs(reward).toLocaleString();
+      const resultsDisplay = result.join(" | ");
+
+      const display = `>🎀
+• 𝐁𝐚𝐛𝐲, 𝐘𝐨𝐮 ${winStatus} ${amount}$
+• 𝐆𝐚𝐦𝐞 𝐑𝐞𝐬𝐮𝐥𝐭𝐬: [ ${resultsDisplay} ]
+`;
+      // --- END FIXED OUTPUT FORMAT ---
       
       return message.reply(display);
     } catch (err) {
