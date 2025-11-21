@@ -1,6 +1,4 @@
-// File: admin.js (Plain Text Version)
-// Author: Rahaman Leon
-// Description: Manage bot admin roles with plain-text output
+// admin.js (FIXED - ID Handling and Logging)
 
 const fs = require('fs-extra');
 const path = require('path');
@@ -13,7 +11,7 @@ module.exports = {
         version: "1.0",
         author: "XXR3XX",
         coolDown: 5,
-        role: 2,
+        role: 2, // Only Bot Owner can use this command
         description: "Add, remove, or list bot admin roles (works in groups)",
         category: "owner",
         guide: {
@@ -29,10 +27,13 @@ module.exports = {
 
         async function getTargetUserIds() {
             const ids = new Set();
+            const senderID = normalizeJid(message.sender);
 
+            // 1. Quoted Message
             if (message.hasQuotedMsg) {
                 try {
                     const quotedMsg = await message.getQuotedMessage();
+                    // Use quotedMsg.author (if participant in group) or quotedMsg.from (if direct message)
                     const authorId = quotedMsg.author || quotedMsg.from;
                     if (authorId) ids.add(normalizeJid(authorId));
                 } catch (error) {
@@ -40,52 +41,60 @@ module.exports = {
                 }
             }
 
-            try {
-                const mentions = await message.getMentions();
-                if (mentions && mentions.length > 0) {
-                    mentions.forEach(m => {
-                        if (m && m.id && m.id._serialized) ids.add(normalizeJid(m.id._serialized));
-                    });
-                }
-            } catch (error) {
-                log(`Error getting mentions: ${error.message}`, 'warning');
+            // 2. Mentions
+            // message.mentionedIds should contain normalized JIDs (e.g., number@s.whatsapp.net)
+            if (message.mentionedIds && message.mentionedIds.length > 0) {
+                 message.mentionedIds.forEach(id => {
+                    ids.add(normalizeJid(id));
+                 });
             }
-
+            
+            // 3. Phone Number/JID argument
             if (ids.size === 0 && args.length > 1) {
-                const phoneArg = args[1].replace(/[^\d]/g, '');
-                if (phoneArg.length >= 10) ids.add(normalizeJid(phoneArg));
+                const targetArg = args[1];
+                // Check if argument looks like a number (phone or JID)
+                if (targetArg) {
+                    // Remove non-digit chars, then normalize
+                    const phoneArg = targetArg.replace(/[^\d]/g, '');
+                    if (phoneArg.length >= 10) ids.add(normalizeJid(phoneArg));
+                    // Or if it already looks like a full JID
+                    else if (targetArg.includes('@s.whatsapp.net')) ids.add(normalizeJid(targetArg));
+                }
             }
 
-            return [...ids].filter(id => id && id.trim().length > 0);
+            return [...ids].filter(id => id && id !== senderID); // Filter out sender if they are mentioning themselves
         }
 
         async function getNames(idList) {
             return Promise.all(idList.map(async (id) => {
                 try {
                     let name = id.split('@')[0];
-                    if (client && typeof client.getContactById === 'function') {
+                    if (client && typeof client.getContactInfo === 'function') { // Use getContactInfo for compatibility
                         try {
-                            const contact = await client.getContactById(id);
-                            name = contact.name || contact.pushname || name;
+                            const c = await client.getContactInfo(id);
+                            name = c.name || c.pushname || name;
                         } catch {}
                     }
-                    return `• ${name} (${id})`;
+                    return `• ${name} (${id.split('@')[0]})`; // Show name and shortened JID
                 } catch {
-                    return `• ${id}`;
+                    return `• ${id.split('@')[0]}`;
                 }
             }));
         }
 
         async function addAdmins(ids) {
+            // ... (Add/Remove logic is mostly fine, using normalizeJid) ...
             const added = [], already = [], invalid = [];
             const currentAdminBots = config.adminBot.map(normalizeJid);
 
             for (const id of ids) {
                 const normalizedId = normalizeJid(id);
-                if (!normalizedId || (!normalizedId.includes('@s.whatsapp.net') && !normalizedId.includes('@lid'))) {
+                // Basic validation
+                if (!normalizedId || !normalizedId.includes('@s.whatsapp.net')) {
                     invalid.push(id);
                     continue;
                 }
+                
                 if (currentAdminBots.includes(normalizedId)) already.push(id);
                 else {
                     config.adminBot.push(normalizedId);
@@ -100,23 +109,25 @@ module.exports = {
             const res = [];
             if (added.length) {
                 const names = await getNames(added);
-                res.push(`Added ${added.length} admin(s):\n${names.join('\n')}`);
+                res.push(`✅ Added ${added.length} admin(s):\n${names.join('\n')}`);
             }
             if (already.length) {
                 const names = await getNames(already);
-                res.push(`Already admin(s):\n${names.join('\n')}`);
+                res.push(`⚠️ Already admin(s):\n${names.join('\n')}`);
             }
-            if (invalid.length) res.push(`Invalid ID(s): ${invalid.join(', ')}`);
+            if (invalid.length) res.push(`❌ Invalid ID(s) skipped: ${invalid.join(', ')}`);
             return res.join('\n\n') || "No changes made.";
         }
 
         async function removeAdmins(ids) {
+            // ... (Remove logic is mostly fine) ...
             const removed = [], notAdmin = [], protected = [];
             let updatedAdminBot = [...config.adminBot];
-            const currentUser = normalizeJid(contact.id._serialized);
+            const currentUser = normalizeJid(message.sender); // Use message.sender
 
             for (const id of ids) {
                 const normalizedIdToRemove = normalizeJid(id);
+                
                 if (normalizedIdToRemove === currentUser) {
                     protected.push(id);
                     continue;
@@ -138,13 +149,13 @@ module.exports = {
             const res = [];
             if (removed.length) {
                 const names = await getNames(removed);
-                res.push(`Removed ${removed.length} admin(s):\n${names.join('\n')}`);
+                res.push(`✅ Removed ${removed.length} admin(s):\n${names.join('\n')}`);
             }
             if (notAdmin.length) {
                 const names = await getNames(notAdmin);
-                res.push(`Not admin(s):\n${names.join('\n')}`);
+                res.push(`⚠️ Not admin(s):\n${names.join('\n')}`);
             }
-            if (protected.length) res.push(`Cannot remove yourself from admin`);
+            if (protected.length) res.push(`❌ Cannot remove yourself from admin`);
             return res.join('\n\n') || "No changes made.";
         }
 
@@ -156,7 +167,7 @@ module.exports = {
                 const normalizedId = normalizeJid(id);
                 const isAdmin = currentAdminBots.includes(normalizedId);
                 const names = await getNames([id]);
-                results.push(`${names[0]} - ${isAdmin ? 'Bot Admin' : 'Not Bot Admin'}`);
+                results.push(`${names[0]} - ${isAdmin ? '✅ Bot Admin' : '❌ Not Bot Admin'}`);
             }
 
             return `Admin Status Check:\n\n${results.join('\n')}`;
@@ -166,6 +177,7 @@ module.exports = {
             const action = (args[0] || "list").toLowerCase();
 
             switch (action) {
+                // ... (Cases are unchanged) ...
                 case "add":
                 case "-a":
                 case "promote": {
@@ -196,7 +208,7 @@ module.exports = {
                 case "-l":
                 case "all":
                 default: {
-                    if (!config.adminBot.length) return message.reply("No bot admins configured.");
+                    if (!config.adminBot || !config.adminBot.length) return message.reply("No bot admins configured.");
 
                     const list = await getNames(config.adminBot);
                     const response = `Bot Admins (${list.length}):\n\n${list.join('\n')}`;
@@ -206,7 +218,7 @@ module.exports = {
             }
         } catch (err) {
             log(`Error in admin command: ${err.message}`, 'error');
-            return message.reply(`Something went wrong while managing admins: ${err.message}`);
+            return message.reply(`❌ Something went wrong while managing admins: ${err.message}`);
         }
     }
 };
