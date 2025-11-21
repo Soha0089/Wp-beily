@@ -1,12 +1,19 @@
+// rank.js (FIXED)
 
-const { getUserData, log, getAllUsers } = require('../scripts/helpers');
+const { getUserData, log, getAllUsers, normalizeJid } = require('../scripts/helpers');
+
+// Helper function definition is safer outside module.exports if it's purely mathematical
+function getXPForLevel(level) {
+    // Formula: Level 1: 50, Level 2: 200, Level 3: 450, etc.
+    return Math.floor(Math.pow(level, 2) * 50);
+}
 
 module.exports = {
   config: {
     name: "rank",
     aliases: ["level"],
-    version: "1.7",
-    author: "MahMUD",
+    version: "1.8", // Updated version
+    author: "MahMUD + Fixes",
     coolDown: 3,
     role: 0,
     description: "Check your current rank and XP",
@@ -18,58 +25,74 @@ module.exports = {
 
   onStart: async function ({ message, client, args, contact }) {
     try {
-      // const User = require('../models/User'); // No longer needed
-
       if (args[0]?.toLowerCase() === 'top') {
         return await this.showLeaderboard(message, client);
       }
 
-      let targetUserId = contact.id._serialized;
-      let targetName = contact.name || contact.pushname || "You";
+      // 1. Determine Target User ID
+      let targetUserId = normalizeJid(message.sender); // message.sender is the most reliable ID in the messageWrapper
+      let targetName = contact.name || contact.pushname || targetUserId.split('@')[0];
 
       if (message.hasQuotedMsg) {
         const quotedMsg = await message.getQuotedMessage();
-        targetUserId = quotedMsg.author || quotedMsg.from;
-        try {
-          const targetContact = await client.getContactById(targetUserId);
-          targetName = targetContact.name || targetContact.pushname || targetUserId.split('@')[0];
-        } catch {
-          targetName = targetUserId.split('@')[0];
-        }
+        // Quoted message author ID needs to be normalized
+        targetUserId = normalizeJid(quotedMsg.author || quotedMsg.from); 
       } else {
         const mentionedIds = message.mentionedIds || [];
         if (mentionedIds.length > 0) {
-          targetUserId = mentionedIds[0];
-          try {
-            const targetContact = await client.getContactById(targetUserId);
-            targetName = targetContact.name || targetContact.pushname || targetUserId.split('@')[0];
-          } catch {
-            targetName = targetUserId.split('@')[0];
-          }
+          // Mentioned ID needs to be normalized
+          targetUserId = normalizeJid(mentionedIds[0]); 
         }
       }
 
-      const allUsers = await getAllUsers('exp', 0, {}); // Get all users sorted by exp descending
-      const targetUser = await getUserData(targetUserId); // getUserData already handles both DB modes
+      // 2. Get All Users and Target Data in parallel
+      const [allUsers, targetUser] = await Promise.all([
+          getAllUsers('exp', 0, {}), 
+          getUserData(targetUserId)
+      ]);
+      
+      if (!targetUser) {
+          return message.reply(`❌ Could not find data for user: ${targetUserId.split('@')[0]}`);
+      }
+
+      // 3. Re-fetch Target Name (if not self and better name needed)
+      if (targetUserId !== normalizeJid(message.sender)) {
+          try {
+            // Check if client.getContactInfo is available on the compat layer
+            if (client && typeof client.getContactInfo === 'function') {
+                const targetContact = await client.getContactInfo(targetUserId);
+                targetName = targetContact.name || targetContact.pushname || targetUser.name || targetUserId.split('@')[0];
+            } else {
+                targetName = targetUser.name || targetUserId.split('@')[0];
+            }
+          } catch {
+             targetName = targetUser.name || targetUserId.split('@')[0];
+          }
+      }
+
+      // 4. Calculate Rank
+      // getAllUsers sorts by 'exp' descending. Rank is index + 1
       const rank = allUsers.findIndex(u => u.id === targetUserId) + 1;
 
-      const xpForCurrent = this.getXPForLevel(targetUser.level);
-      const xpForNext = this.getXPForLevel(targetUser.level + 1);
+      // 5. Calculate XP Progress (using the local/exposed function)
+      const xpForCurrent = getXPForLevel(targetUser.level);
+      const xpForNext = getXPForLevel(targetUser.level + 1);
+      
       const progress = Math.max(0, targetUser.exp - xpForCurrent);
       const needed = Math.max(0, xpForNext - targetUser.exp);
-      const totalGap = xpForNext - xpForCurrent || 1;
+      const totalGap = xpForNext - xpForCurrent || 1; // Avoid division by zero
 
       const percent = Math.max(0, Math.min(progress / totalGap, 1));
       const filled = Math.floor(percent * 10);
       const bar = '░'.repeat(10).split('').fill('█', 0, filled).join('');
 
-      const isOwn = targetUserId === contact.id._serialized;
+      const isOwn = targetUserId === normalizeJid(message.sender);
       const displayName = isOwn ? ">🎀 𝐁𝐚𝐛𝐲, 𝐲𝐨𝐮𝐫 𝐫𝐚𝐧𝐤" : `>🎀 ${targetName}, 𝐫𝐚𝐧𝐤`;
 
       const msg = `
-> ${displayName}
+${displayName}
 ━━━━━━━━━━━━━━━━━━━━━
-• 𝐑𝐚𝐧𝐤: #${rank} of ${allUsers.length}
+• 𝐑𝐚𝐧𝐤: #${rank}${allUsers.length > 0 ? ` of ${allUsers.length}` : ''}
 • 𝐋𝐞𝐯𝐞𝐥: ${targetUser.level}
 • 𝐄𝐱𝐩: ${targetUser.exp.toLocaleString()}
 ━━━━━━━━━━━━━━━━━━━━━
@@ -87,20 +110,25 @@ ${bar} ${Math.round(percent * 100)}%
   },
 
   async showLeaderboard(message, client) {
-    // const User = require('../models/User'); // No longer needed
     try {
-      const top = await getAllUsers('exp', 10, {}); // Get top 10 users by exp
+      // getAllUsers('exp', 10, {}) is correct for fetching top 10 by exp
+      const top = await getAllUsers('exp', 10, {}); 
       if (!top.length) return await message.reply("📊 No users on the leaderboard yet!");
 
       let text = "🏆 Top 10 Leaderboard\n━━━━━━━━━━━━━━━━━━━━━\n";
 
       for (let i = 0; i < top.length; i++) {
         const u = top[i];
-        let name = u.id.split('@')[0];
+        let name = u.name || u.id.split('@')[0]; // Use DB name first (if available)
+        
+        // Try to get a real-time name via client/compat
         try {
-          const c = await client.getContactById(u.id);
-          name = c.name || c.pushname || name;
-        } catch {}
+          if (client && typeof client.getContactInfo === 'function') {
+            const c = await client.getContactInfo(u.id);
+            name = c.name || c.pushname || name;
+          }
+        } catch {} // Silent fail for contact info
+
         const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i + 1}.`;
         text += `${medal} ${name}\n   Level ${u.level} • ${u.exp.toLocaleString()} XP\n\n`;
       }
@@ -112,10 +140,9 @@ ${bar} ${Math.round(percent * 100)}%
       await message.reply("❌ Failed to load leaderboard.");
     }
   },
-
-  getXPForLevel(level) {
-    return Math.floor(Math.pow(level, 2) * 50);
-  },
+  
+  // Expose the helper function locally
+  getXPForLevel: getXPForLevel,
 
   formatTimeAgo(ms) {
     const s = Math.floor(ms / 1000), m = Math.floor(s / 60), h = Math.floor(m / 60), d = Math.floor(h / 24);
