@@ -55,20 +55,19 @@ module.exports = {
       const lowerBody = body.toLowerCase();
       
       // --- 1. Handle Direct Reply/Quote to the Bot ---
-      // Your index.js provides quotedMsg, which should be checked first for direct replies.
       if (message.quotedMsg && message.quotedMsg.fromMe) {
-        // Treat the ENTIRE message body as the query for the API.
+        // If the user quotes the bot, treat the ENTIRE message body as the query for the API.
         const replyText = await getBotResponse(body);
         return client.sendMessage(message.from, { text: replyText }, { quoted: message });
       }
 
       // --- 2. Check for Trigger Word in New Message ---
       
-      let triggerEndIndex = -1; // To store the position where the command ends
+      let triggerEndIndex = -1; 
       let isTriggered = false;
       
       for (const t of mahmud) {
-        // Check if the message starts with the trigger (case-insensitive check on lowerBody)
+        // Check if the message starts with the trigger (case-insensitive)
         if (lowerBody === t || lowerBody.startsWith(t + " ")) {
           
           // Calculate the end index based on the lowercase trigger length
@@ -104,7 +103,7 @@ module.exports = {
       ];
       
       // --- 3. Extract the Query using the calculated index on the original body ---
-      // This step ensures correct query extraction regardless of capitalization (e.g., 'Bby hi')
+      // This is the core fix: correctly extracting the query text.
       const query = body.substring(triggerEndIndex).trim();
 
       // --- 4. Handle "Trigger Only" (Random Reply) ---
@@ -115,7 +114,6 @@ module.exports = {
       
       // --- 5. Handle "Trigger + Message" (API Response) ---
       else {
-        // This is the logic for multi-word commands (e.g., "bby ki koro")
         const botResponse = await getBotResponse(query);
         return client.sendMessage(message.from, { text: botResponse }, { quoted: message });
       }
