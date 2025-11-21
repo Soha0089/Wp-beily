@@ -1,12 +1,38 @@
-// count.js (FIXED to use Per-Group Message Count)
+// count.js (FINAL FIXED VERSION - Using Group.js Model for Per-Group Count)
 
 const { getGroupData, updateGroupData, getUserData, log, normalizeJid } = require('../scripts/helpers');
+
+// Helper to safely get count from Map or Object structure (Handles MongoDB/JSON consistency)
+function getCount(counts, userID) {
+    if (!counts) return 0;
+    if (typeof counts.get === 'function') { // Check if it's a Map (MongoDB)
+        return counts.get(userID) || 0;
+    }
+    // Assume it's a plain object for JSON fallback
+    return counts[userID] || 0;
+}
+
+// Helper to safely set count in Map or Object structure
+function setCount(counts, userID, count) {
+    if (!counts) {
+        // Initialize as an Object for JSON fallback consistency if null/undefined
+        counts = {}; 
+    }
+    
+    if (typeof counts.set === 'function') { // Check if it's a Map (MongoDB)
+        counts.set(userID, count);
+        return counts;
+    }
+    // Assume it's a plain object for JSON fallback
+    counts[userID] = count;
+    return counts;
+}
 
 module.exports = {
   config: {
     name: "count",
     aliases: ["msgcount", "messages", "c"],
-    version: "1.9", // Updated version
+    version: "1.9.1", 
     author: "MahMUD + Fixes",
     countDown: 5,
     role: 0,
@@ -18,47 +44,48 @@ module.exports = {
     }
   },
 
-  onStart: async function ({ message, args, chat, contact }) {
+  onStart: async function ({ message, args, contact }) {
     try {
-      // 1. Identify IDs (Use message.sender for user, message.from for group/chat)
-      const groupID = normalizeJid(message.from); // Thread/Group ID
+      const groupID = normalizeJid(message.from); 
       const userID = normalizeJid(message.sender); 
-      // Use pushname/name from contact object for display
       const userName = contact?.pushname || contact?.name || "Your"; 
 
-      if (!groupID || !userID || groupID.endsWith('@s.whatsapp.net')) {
-          // If it's a DM (not a group), show an error or fallback to User.js global count
-          // For now, we assume this command is group-specific.
-          return message.reply("❌ This command is only available in groups.");
+      // Command is strictly for groups
+      if (!groupID || !groupID.includes('@g.us')) {
+          return message.reply("❌ This command works only in groups.");
       }
 
-      // 2. Get Group Data
+      // 1. Get Group Data
       const groupData = await getGroupData(groupID);
-      const userMessageCount = groupData.messageCounts.get(userID) || 0;
+      
+      // 2. Safely get the user's count in this group
+      const userMessageCount = getCount(groupData.messageCounts, userID);
 
       if (args[0]?.toLowerCase() === "all") {
         // --- LEADERBOARD LOGIC (Per-Group) ---
         
-        const countsMap = groupData.messageCounts;
+        const counts = groupData.messageCounts || {};
+        let topUsers = [];
         
-        // Convert Map to Array of {id, count} and sort by count descending
-        const topUsers = Array.from(countsMap.entries())
+        // Convert counts (Map or Object) to an array for sorting
+        const entries = typeof counts.entries === 'function' ? counts.entries() : Object.entries(counts);
+
+        topUsers = Array.from(entries)
           .map(([id, count]) => ({ id, count }))
           .filter(u => u.count > 0)
           .sort((a, b) => b.count - a.count)
-          .slice(0, 50); // Limit to top 50
+          .slice(0, 50); 
         
-
         if (!topUsers.length)
           return message.reply("❌ No message data found for any user in this group yet.");
 
-        let msg = `📊 *Message Leaderboard* (${groupData.name || groupID.split('@')[0]}):\n━━━━━━━━━━━━━━━━━━━━━\n`;
+        let msg = `📊 *Message Leaderboard* (${groupID.split('@')[0]}):\n━━━━━━━━━━━━━━━━━━━━━\n`;
         
         for (let i = 0; i < topUsers.length; i++) {
           const user = topUsers[i];
           const rank = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i + 1}.`;
           
-          // Get name from User model if possible (or fallback to JID)
+          // Fetch User model data only for name (optional, but good for display)
           const fullUserData = await getUserData(user.id);
           const name = fullUserData?.name || user.id.split('@')[0]; 
           
@@ -82,32 +109,31 @@ module.exports = {
 
   onChat: async function ({ message, contact }) {
     try {
-      if (message.key.fromMe) return; 
+      // Don't track bot's own messages or messages outside groups
+      if (message.key.fromMe || !message.from.includes('@g.us')) return; 
       
       const groupID = normalizeJid(message.from);
       const userID = normalizeJid(message.sender);
+      const userName = contact?.pushname || contact?.name || "Unknown";
       
-      // Only track in groups
-      if (!groupID || !userID || groupID.endsWith('@s.whatsapp.net')) return;
+      if (!groupID || !userID) return;
 
-      // 1. Get Group Data (will create if non-existent)
+      // 1. Get Group Data (will ensure group document exists)
       const groupData = await getGroupData(groupID);
       
-      // 2. Get current count
-      const currentCount = groupData.messageCounts.get(userID) || 0;
+      // 2. Safely get current count and update
+      const currentCount = getCount(groupData.messageCounts, userID);
       
-      // 3. Update the Map value
-      groupData.messageCounts.set(userID, currentCount + 1);
+      // Update the Map/Object value
+      const updatedCounts = setCount(groupData.messageCounts, userID, currentCount + 1);
       
-      // 4. Update the Group document using the modified Map
-      // Note: MongoDB $set handles Map updates efficiently.
+      // 3. Update the Group document with the new counts Map/Object
       await updateGroupData(groupID, {
-        messageCounts: groupData.messageCounts
+        messageCounts: updatedCounts
       });
       
-      // Also update the User model for name tracking (optional but recommended)
-      const userName = contact?.pushname || contact?.name || "Unknown";
-      await getUserData(userID, userName); 
+      // Recommended: Update User model only for name/last active time
+      await updateUserData(userID, { name: userName, lastActive: Date.now() }); 
 
     } catch (err) {
       log(`Error updating per-group message count: ${err.message}`, 'error');
