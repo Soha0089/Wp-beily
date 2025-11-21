@@ -1,4 +1,4 @@
-// config.json (FIXED)
+
 
 {
   "whatsapp": {
@@ -62,8 +62,6 @@
     },
     "gemini": {
       "apiKey": "2kablfJp2P0" 
-      // Note: This API key format "2kablfJp2P0" looks incomplete/placeholder.
-      // Ensure you use a full, valid Gemini API key here when deploying.
     }
   },
   "rateLimiting": {
