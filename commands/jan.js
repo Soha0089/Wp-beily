@@ -1,11 +1,7 @@
 const axios = require("axios");
 
-const MAX_REPLY_DEPTH = 5;
-
 const baseApiUrl = async () => {
-  const base = await axios.get(
-    "https://raw.githubusercontent.com/mahmudx7/exe/main/baseApiUrl.json"
-  );
+  const base = await axios.get("https://raw.githubusercontent.com/mahmudx7/exe/main/baseApiUrl.json");
   return base.data.jan;
 };
 
@@ -15,6 +11,7 @@ const getBotResponse = async (msg) => {
     const res = await axios.get(`${base}/jan/font3/${encodeURIComponent(msg)}`);
     return res.data?.message || "❌ Try again.";
   } catch (err) {
+    console.error("API Error:", err.message || err);
     return "❌ Error occurred, janu 🥲";
   }
 };
@@ -32,83 +29,69 @@ module.exports = {
     guide: "Just type jan or jan <message>, or reply jan message"
   },
 
-  onStart: async function () {},
+  onStart: async () => {},
 
-  // -------------------------------
-  // 🚀 FIXED onChat
-  // -------------------------------
-  onChat: async function ({ message, event, api }) {
-    const body = message.body?.toLowerCase() || "";
-    const triggers = ["jan", "jaan", "জান", "hinata", "bby", "baby"];
-    const words = body.trim().split(/\s+/);
-
-    const match = triggers.some(trigger => body.startsWith(trigger));
-
-    if (!match) return;
-
-    let replyText;
-
-    // "jan" only → random reply
-    if (words.length === 1) {
-      const replies = [
-        "oi mama ar dakis na pilis 😿",
-        "babu khuda lagse🥺",
-        "Hop beda😾",
-        "I love you 😘",
-        "mew meow🐤",
-        "Bby bolle pap hoibo 😒",
-        "bolen sir 😌",
-        "single naki tumi? 😏",
-        "__beshI bby bolle kamur dimu 🤭",
-        "khawa dawa korso?",
-        "তোর কথা কেউ শুনে না 😂"
-      ];
-      replyText = replies[Math.floor(Math.random() * replies.length)];
-    } else {
-      // "jan hi", "bby hello"
-      words.shift();
-      replyText = await getBotResponse(words.join(" "));
-    }
-
-    const sent = await message.reply(replyText);
-
-    // Return reply session to GoatBot
-    return {
-      type: "reply",
-      name: this.config.name,
-      author: message.senderID,
-      messageID: sent.messageID,
-      depth: 1
-    };
-  },
-
-  // -------------------------------
-  // 🚀 FIXED onReply (NOW WORKING)
-  // -------------------------------
-  onReply: async function ({ message, Reply, api, event }) {
+  onChat: async function ({ message, client }) {
     try {
-      let depth = Reply.depth + 1;
 
-      if (depth > MAX_REPLY_DEPTH) {
-        return message.reply(
-          `⚠️ Reply loop limit (${MAX_REPLY_DEPTH}) reached. Start a new convo.`
-        );
+      const body = (message.body || "").toLowerCase();
+      const triggers = ["jan","jaan","জান","hinata","bby","baby"];
+      const words = body.trim().split(/\s+/);
+      const match = triggers.some(t => body.startsWith(t));
+
+      // -----------------------------------------
+      // ✅ FIXED REPLY SYSTEM FOR BEILY BOT
+      // -----------------------------------------
+      if (message.quotedMsg) {
+        if (message.quotedMsg.fromMe) {
+          const replyText = await getBotResponse(body);
+          return await client.sendMessage(message.from, { text: replyText }, { quoted: message });
+        }
       }
 
-      const replyText = await getBotResponse(message.body);
+      // -----------------------------------------
+      // ✅ "jan" ONLY → RANDOM REPLY
+      // -----------------------------------------
+      if (match) {
+        if (words.length === 1) {
+          const replies = [
+            "babu khuda lagse🥺",
+            "Hop beda😾,Boss বল boss😼",
+            "আমাকে ডাকলে ,আমি কিন্তূ কিস করে দেবো😘",
+            "naw message daw m.me/mahmud.x07",
+            "mb ney bye bby😘",
+            "মিউ মিউ 🐱",
+            "বলো কি বলবা? 🤭",
+            "𝗜 𝗹𝗼𝘃𝗲 𝘆𝗼𝘂__😘😘",
+            "𝗜 𝗵𝗮𝘁𝗲 𝘆𝗼𝘂__😏😏",
+            "গোসল করে আসো যাও😑😩",
+            "অ্যাসলামওয়ালিকুম",
+            "খাইসা আসো 😌",
+            "আমি অন্যের জিনিসের সাথে কথা বলি না__😏",
+            "𝗕𝗯𝘆 𝗻𝗮 𝗯𝗼𝗹𝗲 𝗕𝗼𝘄 বলো 😘",
+            "Meow🐤",
+            "বার বার ডাকলে মাথা গরম হয় 😑",
+            "ওই তুমি single না?😒",
+            "বলো জানু 😒",
+            "হটাৎ আমাকে মনে পড়লো? 🙄",
+            "একটা BF খুঁজে দাও 😿"
+          ];
+          const random = replies[Math.floor(Math.random() * replies.length)];
+          return client.sendMessage(message.from, { text: random }, { quoted: message });
+        }
 
-      const sent = await message.reply(replyText);
+        // -----------------------------------------
+        // ✅ "jan <message>" → API RESPONSE
+        // -----------------------------------------
+        words.shift();
+        const query = words.join(" ");
+        const replyText = await getBotResponse(query);
+        return client.sendMessage(message.from, { text: replyText }, { quoted: message });
+      }
 
-      // Update new reply session
-      return {
-        type: "reply",
-        name: this.config.name,
-        author: message.senderID,
-        messageID: sent.messageID,
-        depth
-      };
-    } catch (err) {
-      return message.reply("❌ Something went wrong.");
+    } catch (e) {
+      console.error("Bot Chat Error:", e);
+      return client.sendMessage(message.from, { text: "❌ Something went wrong." }, { quoted: message });
     }
   }
 };
