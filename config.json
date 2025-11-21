@@ -1,3 +1,5 @@
+// config.json (FIXED)
+
 {
   "whatsapp": {
     "clientId": "whatsapp-bot-production",
@@ -59,7 +61,9 @@
       "model": "gpt-3.5-turbo"
     },
     "gemini": {
-      "apiKey": "2kablfJp2P0"
+      "apiKey": "2kablfJp2P0" 
+      // Note: This API key format "2kablfJp2P0" looks incomplete/placeholder.
+      // Ensure you use a full, valid Gemini API key here when deploying.
     }
   },
   "rateLimiting": {
