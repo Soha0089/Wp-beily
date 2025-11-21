@@ -1,20 +1,38 @@
 const axios = require("axios");
 
+const mahmud = [
+  "baby",
+  "bby",
+  "babu",
+  "bbu",
+  "jan",
+  "bot",
+  "জান",
+  "জানু",
+  "বেবি",
+  "wifey",
+  "hinata"
+];
+
+// --- API Fetch Functions ---
+
 const baseApiUrl = async () => {
   const base = await axios.get("https://raw.githubusercontent.com/mahmudx7/exe/main/baseApiUrl.json");
   return base.data.jan;
 };
 
-const getBotResponse = async (msg) => {
+async function getBotResponse(msg) {
   try {
     const base = await baseApiUrl();
-    const res = await axios.get(`${base}/jan/font3/${encodeURIComponent(msg)}`);
-    return res.data?.message || "❌ Try again.";
+    const response = await axios.get(`${base}/jan/font3/${encodeURIComponent(msg)}`);
+    return response.data?.message || "❌ Try again, janu 🥲";
   } catch (err) {
     console.error("API Error:", err.message || err);
-    return "❌ Error occurred, janu 🥲";
+    return "❌ Error occurred, janu 🥹";
   }
-};
+}
+
+// --- WhatsApp Module Structure ---
 
 module.exports = {
   config: {
@@ -26,79 +44,70 @@ module.exports = {
     shortDescription: "Talk with jan",
     longDescription: "Text-based response using jan AI",
     category: "ai",
-    guide: "Just type jan or jan <message>, or reply jan message"
+    guide: "Just type jan or jan <message>, or reply to the bot's message."
   },
 
   onStart: async () => {},
 
   onChat: async function ({ message, client }) {
     try {
-
       const body = (message.body || "").trim();
       const lowerBody = body.toLowerCase();
-      const triggers = ["jan","jaan","জান","hinata","bby","baby"];
       
-      // --- 1. Identify Trigger Word ---
-      let match = false;
+      // --- 1. Reply to Bot's Message (Similar to onReply) ---
+      if (message.quotedMsg && message.quotedMsg.fromMe) {
+        // This means the user is replying directly to a message sent by the bot (fromMe)
+        const replyText = await getBotResponse(body);
+        return client.sendMessage(message.from, { text: replyText }, { quoted: message });
+      }
+
+      // --- 2. New Message Trigger Check (Similar to onChat) ---
+      // Find the trigger word used at the start of the message
       let triggerUsed = "";
-      for (const t of triggers) {
-        if (lowerBody.startsWith(t)) {
-          // Check if the message is exactly the trigger, or the trigger followed by a space
-          if (lowerBody.length === t.length || lowerBody.startsWith(t + " ")) {
-            match = true;
-            triggerUsed = t;
-            break;
-          }
+      let isTriggered = false;
+      for (const t of mahmud) {
+        if (lowerBody === t || lowerBody.startsWith(t + " ")) {
+          triggerUsed = t;
+          isTriggered = true;
+          break;
         }
       }
 
-      // If no valid trigger match, exit
-      if (!match) return;
+      if (!isTriggered) return; // Exit if no trigger word is found
 
-
-      // --- 2. Handle Reply System (Replying to the bot) ---
-      if (message.quotedMsg) {
-        if (message.quotedMsg.fromMe) {
-          const replyText = await getBotResponse(body);
-          return await client.sendMessage(message.from, { text: replyText }, { quoted: message });
-        }
-      }
+      // Define random responses
+      const responses = [
+        "babu khuda lagse🥺",
+        "Hop beda😾,Boss বল boss😼",  
+        "আমাকে ডাকলে ,আমি কিন্তূ কিস করে দেবো😘 ",  
+        "🐒🐒🐒",
+        "bye",
+        "naw message daw m.me/mahmud.x07",
+        "mb ney bye",
+        "meww",
+        "গোলাপ ফুল এর জায়গায় আমি দিলাম তোমায় মেসেজ",
+        "বলো কি বলবা, সবার সামনে বলবা নাকি?🤭🤏",  
+        "𝗜 𝗹𝗼𝘃𝗲 𝘆𝗼𝘂__😘😘",
+        "__ফ্রী ফে'সবুক চালাই কা'রন ছেলেদের মুখ দেখা হারাম 😌",
+        "মন সুন্দর বানাও মুখের জন্য তো 'Snapchat' আছেই! 🌚"
+      ];
       
-      // --- 3. Extract the Query ---
-      // Get the text that comes after the trigger word
+      // Extract the query after the trigger
       const query = body.substring(triggerUsed.length).trim();
 
-      // --- 4. Handle "Trigger Only" (Random Reply) ---
+      // --- 3. Handle "Trigger Only" (Random Reply) ---
       if (query.length === 0) {
-        const replies = [
-          "babu khuda lagse🥺",
-          "Hop beda😾,Boss বল boss😼",
-          "আমাকে ডাকলে ,আমি কিন্তূ কিস করে দেবো😘",
-          "naw message daw m.me/mahmud.x07",
-          "mb ney bye bby😘",
-          "মিউ মিউ 🐱",
-          "বলো কি বলবা? 🤭",
-          "𝗜 𝗹𝗼𝘃𝗲 𝘆𝗼𝘂__😘😘",
-          "𝗜 𝗵𝗮𝘁𝗲 𝘆𝗼𝘂__😏😏",
-          "গোসল করে আসো যাও😑😩",
-          "অ্যাসলামওয়ালিকুম",
-          "খাইসা আসো 😌",
-          "আমি অন্যের জিনিসের সাথে কথা বলি না__😏",
-          "𝗕𝗯𝘆 𝗻𝗮 𝗯𝗼𝗹𝗲 𝗕𝗼𝘄 বলো 😘",
-          "Meow🐤",
-          "বার বার ডাকলে মাথা গরম হয় 😑",
-          "ওই তুমি single না?😒",
-          "বলো জানু 😒",
-          "হটাৎ আমাকে মনে পড়লো? 🙄",
-          "একটা BF খুঁজে দাও 😿"
-        ];
-        const random = replies[Math.floor(Math.random() * replies.length)];
-        return client.sendMessage(message.from, { text: random }, { quoted: message });
+        const randomMsg = responses[Math.floor(Math.random() * responses.length)];
+        // The WhatsApp framework doesn't have a direct "typing indicator" or "reaction" like Messenger, 
+        // so we'll just send the message.
+        return client.sendMessage(message.from, { text: randomMsg }, { quoted: message });
+      } 
+      
+      // --- 4. Handle "Trigger + Message" (API Response) ---
+      else {
+        const botResponse = await getBotResponse(query);
+        return client.sendMessage(message.from, { text: botResponse }, { quoted: message });
       }
-
-      // --- 5. Handle "Trigger + Message" (API Response) ---
-      const replyText = await getBotResponse(query);
-      return client.sendMessage(message.from, { text: replyText }, { quoted: message });
 
     } catch (e) {
       console.error("Bot Chat Error:", e);
